@@ -16,7 +16,9 @@ require 'net/http'
 ## Note the %2F to separate namespace and project.
 ## For example if your project will be named https://example.com/foo/bar,
 ## replace below with 'foo%2Fbar'.
-@project='namespace%2Fproject'
+@group='vatsim-uk'
+@project='Core_test'
+@full_project_namespace="#{@group}%2F#{@project}"
 
 ## Change to 80 if you are not going to use ssl (although you should).
 @http = Net::HTTP.new("#{@host}",443)
@@ -27,7 +29,8 @@ require 'net/http'
 #########################
 ## Kick off the import ##
 #########################
-
+@milestones=get_milestones()
+@members=get_members()
 import(load_bitbucket())
 
 def load_bitbucket()
@@ -37,16 +40,123 @@ end
 def import(bitbucket_json)
   id_map={}
   bitbucket_json['issues'].each do |issue|
+	break
     issue_id=issue['id']
-    gitlab_id=post_issue(issue['title'],issue['content'])
+	labels=['bb2gl']
+
+	# Labels!
+	if(issue['kind'] == 'enhancement' or issue['kind'] == 'task')
+		labels.push 'Enhancement'
+	elsif(issue['kind'] == 'bug')
+		labels.push 'Bug'
+	elsif(issue['kind'] == 'proposal')
+		labels.push 'Suggestion'
+	end
+	
+	if(issue['priority'] == 'blocker' or issue['priority'] == 'critical' or issue['priority'] == 'major')
+		labels.push 'Critical'
+	end
+	
+	if(issue['component'] == 'Core/Cosmetics')
+		labels.push 'Cosmetic'
+	else
+		labels.push 'Code'
+	end
+	
+	# Assignee
+	if issue['assignee'] ==
+	
+	if issue['assignee'] == 'joe__clifford'
+		assignee=get_member_id('JClifford')
+	elsif issue['assignee'] == 'jpfox'
+		assignee=get_member_id('jpfox')
+	else
+		assignee=get_member_id(issue['asignee'])
+	end
+	
+	# Milestone
+	milestone=''
+
+	if issue['milestone'] == '1.0.x [SSO]'
+		milestone = get_milestone_id("v1.0.0")
+	elsif issue['milestone'] == '1.1.x [SSO-SLS]'
+		milestone = get_milestone_id("v1.1.0")
+	elsif issue['milestone'] == '1.2.x [EMails]'
+		milestone = get_milestone_id("v1.2.0")
+	elsif issue['milestone'] == '1.3.x [Laravel]'
+		milestone = get_milestone_id("v1.3.0")
+	elsif issue['milestone'] == '2.0 [Admin]'
+		milestone = get_milestone_id("v2.0.0")
+	elsif issue['milestone'] == '2.1.x [Teamspeak]'
+		milestone = get_milestone_id("v2.1.0")
+	elsif issue['milestone'] == '2.2.x [Laravel 5.1, Mship Bans]'
+		if issue['status'] == 'resolved'
+			milestone = get_milestone_id("v2.2.0")
+		else
+			labels.push 'Soon'
+		end
+	elsif issue['milestone'] == '2.2.1 [Code Improvements]'
+		milestone = get_milestone_id("v2.2.1")
+	elsif issue['milestone'] == '2.x.x'
+		labels.push 'Future'
+		labels.push 'Suggestion'
+	elsif issue['milestone'] == 'x.0.x [AIS]'
+		labels.push 'Future'
+		labels.push 'Suggestion'
+	elsif issue['milestone'] == 'x.0.x [Site]'
+		labels.push 'Future'
+		labels.push 'Suggestion'
+	elsif issue['milestone'] == 'x.0.x [Training]'
+		labels.push 'Future'
+		labels.push 'Suggestion'
+	elsif issue['milestone'] == 'x.0.x [VT]'
+		labels.push 'Future'
+		labels.push 'Suggestion'
+	end
+	
+	# Are we holding any for a bit?
+	if issue['status'] == 'on hold'
+		labels.push 'On Hold'
+	elsif issue['status'] == 'invalid' or issue['status'] == 'wontfix'
+		labels.push 'Invalid'
+	elsif issue['status'] == 'duplicate'
+		labels.push 'Duplicate'
+	elsif issue['status'] == 'closed'
+		labels.push 'IO-CLOSED'
+	elsif issue['status'] == 'resolved'
+		labels.push 'IO-CLOSED'
+	end
+	
+    gitlab_id=post_issue("#{issue['title']} (#{issue_id})",issue['content'], assignee, milestone, labels)
     id_map[issue_id]=gitlab_id
-    if('resolved' == issue['status'])
-      close_issue(gitlab_id)
+	if 'new' != issue['status'] and 'open' != issue['status'] and 'on hold' != issue['status']
+		close_issue(gitlab_id)
     end
+	
   end
   bitbucket_json['comments'].each do |comment|
     if comment['content']
-      post_comment(id_map[comment['issue']],"#{comment['content']}\n\n#{comment['user']} - #{comment['created_on']}")
+	
+		# Let's fix any REALLY Bad issue references
+		results = comment['content'].scan(/#(\d+)[^\D]/i)
+		
+		if results.length > 0
+			puts comment['content']
+		end
+		
+		results.each do |bad_reference|
+			comment['content'] = comment['content'].gsub(/#{bad_reference}/, 'x')
+		end
+		
+		if results.length > 0
+			puts comment['content']
+			exit
+		end
+		
+		next
+		
+		# Push away!
+        post_comment(id_map[comment['issue']],"#{comment['content']}\n\n#{comment['user']} - #{comment['created_on']}")
     end
   end
 
@@ -58,26 +168,24 @@ def gitlab_key(email,password)
   JSON.parse(res.body)['private_token']
 end
 
-def post_issue(title,description)
-  uri = URI("#{@base_url}/api/v3/projects/#{@project}/issues")
-  res = Net::HTTP.post_form(uri, 'title' => title, 'description' => description, 'private_token' => @token, 'labels' => ['bitbucket2gitlab'])
+def post_issue(title,description,assignee,milestone,labels)
+  uri = URI("#{@base_url}/api/v3/projects/#{@full_project_namespace}/issues")
+  res = Net::HTTP.post_form(uri, 'title' => title, 'description' => description, 'private_token' => @token, 'assignee_id' => assignee, 'milestone_id' => milestone, 'labels' => labels.join(","))
   created=JSON.parse(res.body)
   puts created.to_json
   created['id']
 end
 
 def post_comment(id,content)
-  uri = URI("#{@base_url}/api/v3/projects/#{@project}/issues/#{id}/notes")
+  uri = URI("#{@base_url}/api/v3/projects/#{@full_project_namespace}/issues/#{id}/notes")
   res = Net::HTTP.post_form(uri, 'body' => content,'private_token' => @token)
   created=JSON.parse(res.body)
   puts created.to_json
 end
 
 def close_issue(id)
-
-  # uri = URI("#{@base_url}/api/v3/projects/#{@project}/issues")
-
-  request = Net::HTTP::Put.new("/api/v3/projects/#{@project}/issues/#{id}")
+	
+  request = Net::HTTP::Put.new(URI("#{@base_url}/api/v3/projects/#{@full_project_namespace}/issues/#{id}"))
 
   request.set_form_data({'private_token' => @token,'state_event'=>'close'})
   response=@http.request(request)
@@ -86,8 +194,46 @@ def close_issue(id)
 end
 
 def get_issues()
-  request = Net::HTTP::Get.new("/api/v3/projects/#{@project}/issues?private_token=#{@token}")
+  request = Net::HTTP::Get.new("#{@base_url}/api/v3/projects/#{@full_project_namespace}/issues?private_token=#{@token}")
   response=@http.request(request)
   puts response.inspect
   puts response.body
+end
+
+def get_milestones()
+	uri = URI("#{@base_url}/api/v3/projects/#{@full_project_namespace}/milestones?private_token=#{@token}")
+	response = Net::HTTP.get_response(uri)
+	return JSON.parse(response.body)
+end
+
+def get_milestone_id(milestone_name)
+	@milestones.each do |milestone|
+		if milestone_name.casecmp(milestone['title']) == 0
+			return milestone['id']
+			break
+		end
+	end
+	return ''
+end
+
+def get_members()
+	uri = URI("#{@base_url}/api/v3/groups/#{@group}/members?private_token=#{@token}")
+	response = Net::HTTP.get_response(uri)
+	group_members = JSON.parse(response.body)
+	
+	uri = URI("#{@base_url}/api/v3/projects/#{@full_project_namespace}/members?private_token=#{@token}")
+	response = Net::HTTP.get_response(uri)
+	project_members = JSON.parse(response.body)
+	
+	return group_members + project_members
+end
+
+def get_member_id(member_username)
+	@members.each do |member|
+		if member_username.casecmp(member['username']) == 0
+			return member['id']
+			break
+		end
+	end
+	return ''
 end
