@@ -70,7 +70,7 @@ def import(bitbucket_json)
 	elsif issue['assignee'] == 'otherOddUser'
 		assignee=get_member_id('OddUserOtherName')
 	else
-		assignee=get_member_id(issue['asignee'])
+		assignee=get_member_id(issue['assignee'])
 	end
 	
 	# Milestone
