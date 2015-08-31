@@ -16,8 +16,8 @@ require 'net/http'
 ## Note the %2F to separate namespace and project.
 ## For example if your project will be named https://example.com/foo/bar,
 ## replace below with 'foo%2Fbar'.
-@group='vatsim-uk'
-@project='Core_test'
+@group='my-group'
+@project='my-project'
 @full_project_namespace="#{@group}%2F#{@project}"
 
 ## Change to 80 if you are not going to use ssl (although you should).
@@ -57,6 +57,7 @@ def import(bitbucket_json)
 		labels.push 'Critical'
 	end
 	
+	# Custom comparisons
 	if(issue['component'] == 'Core/Cosmetics')
 		labels.push 'Cosmetic'
 	else
@@ -64,12 +65,10 @@ def import(bitbucket_json)
 	end
 	
 	# Assignee
-	if issue['assignee'] ==
-	
-	if issue['assignee'] == 'joe__clifford'
-		assignee=get_member_id('JClifford')
-	elsif issue['assignee'] == 'jpfox'
-		assignee=get_member_id('jpfox')
+	if issue['assignee'] == 'my_odd_user_1'
+		assignee=get_member_id('OddUsersNewName')
+	elsif issue['assignee'] == 'otherOddUser'
+		assignee=get_member_id('OddUserOtherName')
 	else
 		assignee=get_member_id(issue['asignee'])
 	end
@@ -117,20 +116,22 @@ def import(bitbucket_json)
 	# Are we holding any for a bit?
 	if issue['status'] == 'on hold'
 		labels.push 'On Hold'
-	elsif issue['status'] == 'invalid' or issue['status'] == 'wontfix'
+	elsif issue['status'] == 'invalid' || issue['status'] == 'wontfix'
 		labels.push 'Invalid'
+		labels.push 'IO-CLOSED'
 	elsif issue['status'] == 'duplicate'
 		labels.push 'Duplicate'
+		labels.push 'IO-CLOSED'
 	elsif issue['status'] == 'closed'
 		labels.push 'IO-CLOSED'
 	elsif issue['status'] == 'resolved'
 		labels.push 'IO-CLOSED'
 	end
 	
-    gitlab_id=post_issue("#{issue['title']} (#{issue_id})",issue['content'], assignee, milestone, labels)
+    gitlab_id=post_issue("#{issue['title']} (Old #{issue_id})",issue['content'], assignee, milestone, labels)
     id_map[issue_id]=gitlab_id
-	if 'new' != issue['status'] and 'open' != issue['status'] and 'on hold' != issue['status']
-		close_issue(gitlab_id)
+	if 'new' != issue['status'] && 'open' != issue['status'] && 'on hold' != issue['status']
+		#close_issue(gitlab_id)
     end
 	
   end
@@ -138,19 +139,11 @@ def import(bitbucket_json)
     if comment['content']
 	
 		# Let's fix any REALLY Bad issue references
-		results = comment['content'].scan(/#(\d+)[^\D]/i)
-		
-		if results.length > 0
-			puts comment['content']
-		end
+		# Find all references to old issue numbers.
+		results = comment['content'].scan(/#([0-9]{1,4})\D*/i)
 		
 		results.each do |bad_reference|
-			comment['content'] = comment['content'].gsub(/#{bad_reference}/, 'x')
-		end
-		
-		if results.length > 0
-			puts comment['content']
-			exit
+			comment['content'] = comment['content'].gsub! bad_reference[0],id_map[bad_reference[0]]
 		end
 		
 		next
@@ -207,6 +200,10 @@ def get_milestones()
 end
 
 def get_milestone_id(milestone_name)
+	if milestone_name.nil? || milestone_name.empty?
+		return ''
+	end
+
 	@milestones.each do |milestone|
 		if milestone_name.casecmp(milestone['title']) == 0
 			return milestone['id']
@@ -229,6 +226,10 @@ def get_members()
 end
 
 def get_member_id(member_username)
+	if member_username.nil? || member_username.empty?
+		return ''
+	end
+
 	@members.each do |member|
 		if member_username.casecmp(member['username']) == 0
 			return member['id']
