@@ -140,16 +140,19 @@ def import(bitbucket_json)
 	
 		# Let's fix any REALLY Bad issue references
 		# Find all references to old issue numbers.
-		results = comment['content'].scan(/#([0-9]{1,4})\D*/i)
+		results = comment['content'].scan(/#([0-9]+)\D*/i)
 		
 		results.each do |bad_reference|
-			comment['content'] = comment['content'].gsub! bad_reference[0],id_map[bad_reference[0]]
+			replacement = id_map.fetch(bad_reference[0].to_i, nil)
+			if replacement.nil? || replacement == 0
+				next
+			else
+				comment['content'] = comment['content'].gsub! bad_reference[0],replacement.to_s
+			end
 		end
 		
-		next
-		
 		# Push away!
-        post_comment(id_map[comment['issue']],"#{comment['content']}\n\n#{comment['user']} - #{comment['created_on']}")
+        	post_comment(id_map[comment['issue']],"#{comment['content']}\n\n#{comment['user']} - #{comment['created_on']}")
     end
   end
 
