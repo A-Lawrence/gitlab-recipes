@@ -3,36 +3,6 @@
 require 'json'
 require 'net/http'
 
-################################################################
-## Modify the following global variables to match yout setup. ##
-################################################################
-## GitLab host without the 'http(s)://' prefix. This is your FQDN.
-@host="host"
-@base_url="https://#{@host}/"
-
-## Add your credentials here
-@token=gitlab_key('user','password')
-
-## Note the %2F to separate namespace and project.
-## For example if your project will be named https://example.com/foo/bar,
-## replace below with 'foo%2Fbar'.
-@group='my-group'
-@project='my-project'
-@full_project_namespace="#{@group}%2F#{@project}"
-
-## Change to 80 if you are not going to use ssl (although you should).
-@http = Net::HTTP.new("#{@host}",443)
-
-## Set to false if you are not going to use ssl (although you should).
-@http.use_ssl=true
-
-#########################
-## Kick off the import ##
-#########################
-@milestones=get_milestones()
-@members=get_members()
-import(load_bitbucket())
-
 def load_bitbucket()
   JSON.parse(IO.read('db-1.0.json'))
 end
@@ -40,7 +10,6 @@ end
 def import(bitbucket_json)
   id_map={}
   bitbucket_json['issues'].each do |issue|
-	break
     issue_id=issue['id']
 	labels=['bb2gl']
 
@@ -58,17 +27,17 @@ def import(bitbucket_json)
 	end
 	
 	# Custom comparisons
-	if(issue['component'] == 'Core/Cosmetics')
+	if(issue['component'] == 'Cosmetic')
 		labels.push 'Cosmetic'
 	else
 		labels.push 'Code'
 	end
 	
 	# Assignee
-	if issue['assignee'] == 'my_odd_user_1'
-		assignee=get_member_id('OddUsersNewName')
-	elsif issue['assignee'] == 'otherOddUser'
-		assignee=get_member_id('OddUserOtherName')
+	if issue['assignee'] == 'my_user_1'
+		assignee=get_member_id('my_other_user_1')
+	elsif issue['assignee'] == 'my_user_funny_name_2'
+		assignee=get_member_id('my_user_2')
 	else
 		assignee=get_member_id(issue['assignee'])
 	end
@@ -147,12 +116,12 @@ def import(bitbucket_json)
 			if replacement.nil? || replacement == 0
 				next
 			else
-				comment['content'] = comment['content'].gsub! bad_reference[0],replacement.to_s
+				comment['content'] = comment['content'].gsub(bad_reference[0],replacement.to_s)
 			end
 		end
 		
 		# Push away!
-        	post_comment(id_map[comment['issue']],"#{comment['content']}\n\n#{comment['user']} - #{comment['created_on']}")
+        post_comment(id_map[comment['issue']],"#{comment['content']}\n\n#{comment['user']} - #{comment['created_on']}")
     end
   end
 
@@ -241,3 +210,35 @@ def get_member_id(member_username)
 	end
 	return ''
 end
+
+################################################################
+## Modify the following global variables to match yout setup. ##
+################################################################
+## GitLab host without the 'http(s)://' prefix. This is your FQDN.
+@host="gitlab.com"
+@base_url="https://#{@host}/"
+
+## Add your credentials here
+# Enable the line below to use user/key for access rather than token.
+# @token=gitlab_key(email, password) 
+@token=""
+
+## Note the %2F to separate namespace and project.
+## For example if your project will be named https://example.com/foo/bar,
+## replace below with 'foo%2Fbar'.
+@group='my-group'
+@project='my-project'
+@full_project_namespace="#{@group}%2F#{@project}"
+
+## Change to 80 if you are not going to use ssl (although you should).
+@http = Net::HTTP.new("#{@host}",443)
+
+## Set to false if you are not going to use ssl (although you should).
+@http.use_ssl=true
+
+#########################
+## Kick off the import ##
+#########################
+@milestones=get_milestones()
+@members=get_members()
+import(load_bitbucket())
